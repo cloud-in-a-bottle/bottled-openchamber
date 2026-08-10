@@ -38,18 +38,30 @@ cpu_cores = 2.0
 #   opencode-*/   -> the bundled OpenCode CLI's config/state/share
 #                    (sessions live here).
 #   workspaces/   -> the agent's project working directory.
-# The Anthropic API key is NEVER written under app_data by us: it is
-# fetched from the secrets service into the process environment at boot
-# only, then inherited by the OpenCode child. See README.
+# Secrets (ANTHROPIC_API_KEY, GITHUB_TOKEN) are NEVER written under
+# app_data by us: they are fetched from the secrets service into the
+# process environment at boot only, then inherited by the OpenCode
+# child. See README.
 app_data = true
 app_temp_data = true
 
-# The Anthropic API key is provisioned via the OpenHost secrets service
-# rather than an env var or an on-disk file. The owner stores
-# ANTHROPIC_API_KEY in the secrets app; this app fetches it at boot
-# through the router-mediated service proxy using its OPENHOST_APP_TOKEN.
+# Credentials are provisioned via the OpenHost secrets service rather
+# than env vars or on-disk files. The owner stores them in the secrets
+# app; this app fetches them at boot through the router-mediated service
+# proxy using its OPENHOST_APP_TOKEN.
+#
+#   ANTHROPIC_API_KEY  the model credential the bundled OpenCode CLI
+#                      needs in order to run the agent at all.
+#   GITHUB_TOKEN       optional. Lets the agent use git and gh against
+#                      private repos and push branches / open PRs
+#                      without a per-session credential prompt. When it
+#                      is absent the app still starts and git falls back
+#                      to unauthenticated access to public repos.
+#
+# Both are optional from the platform's perspective: a missing grant or
+# an unset key degrades a capability, it does not block boot.
 [[services.v2.consumes]]
 service = "github.com/imbue-openhost/openhost/services/secrets"
 shortname = "secrets"
 version = ">=0.1.0"
-grants = [{ key = "ANTHROPIC_API_KEY" }]
+grants = [{ key = "ANTHROPIC_API_KEY" }, { key = "GITHUB_TOKEN" }]
