@@ -1,0 +1,55 @@
+[app]
+name = "openchamber"
+version = "0.1.0"
+description = "OpenChamber — a web workspace for running, supervising, and reviewing AI coding work with the OpenCode agent (session goals, multi-run, diff walkthroughs, GitHub workflows, built-in terminal). Runs as a self-hosted web app on OpenHost: the zone owner is auto-authenticated via OpenHost SSO (no OpenChamber password prompt), and the Anthropic API key is pulled at boot from the OpenHost secrets service and handed to the bundled OpenCode CLI. Anonymous visitors cannot reach any route — the whole app is owner-only because every session can execute arbitrary shell commands in this container."
+authors = ["Andrew Laack <andrew@laack.co>"]
+
+[runtime.container]
+image = "Dockerfile"
+# nginx front proxy port. OpenChamber's server binds 127.0.0.1:3000
+# inside the container; nginx listens on 8080 and is what the OpenHost
+# router forwards to (HTTP + the WebSocket agent/terminal streams under
+# /api/*/ws and the SSE event streams under /api/event etc).
+port = 8080
+
+[routing]
+# nginx serves a static 200 on /_healthz the instant it is up, before
+# OpenChamber (and its managed OpenCode child) finish booting, so the
+# OpenHost readiness probe stays green during cold start.
+health_check = "/_healthz"
+# No public_paths. An OpenChamber session drives the OpenCode agent,
+# which executes arbitrary shell commands, edits files, and exposes an
+# interactive terminal inside this container. So the entire app must
+# stay behind OpenHost zone_auth: the router rejects every anonymous
+# request, and nginx additionally denies any request lacking the
+# router-stamped X-OpenHost-Is-Owner: true header.
+
+[resources]
+# Bun server + the managed OpenCode CLI child + whatever the agent
+# spawns (compilers, test runners, git). 2 GiB / 2 cores is a
+# comfortable baseline; bump for memory-heavy builds.
+memory_mb = 2048
+cpu_cores = 2.0
+
+[data]
+# Persistent state under /data/app_data/openchamber/:
+#   openchamber/  -> OPENCHAMBER_DATA_DIR: settings.json, tokens,
+#                    pairing state, logs, JWT secret.
+#   opencode-*/   -> the bundled OpenCode CLI's config/state/share
+#                    (sessions live here).
+#   workspaces/   -> the agent's project working directory.
+# The Anthropic API key is NEVER written under app_data by us: it is
+# fetched from the secrets service into the process environment at boot
+# only, then inherited by the OpenCode child. See README.
+app_data = true
+app_temp_data = true
+
+# The Anthropic API key is provisioned via the OpenHost secrets service
+# rather than an env var or an on-disk file. The owner stores
+# ANTHROPIC_API_KEY in the secrets app; this app fetches it at boot
+# through the router-mediated service proxy using its OPENHOST_APP_TOKEN.
+[[services.v2.consumes]]
+service = "github.com/imbue-openhost/openhost/services/secrets"
+shortname = "secrets"
+version = ">=0.1.0"
+grants = [{ key = "ANTHROPIC_API_KEY" }]

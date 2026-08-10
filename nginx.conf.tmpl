@@ -1,0 +1,102 @@
+# nginx front proxy for OpenHost OpenChamber.
+#
+# Substituted at boot by start.sh:
+#   __UPSTREAM_PORT__  -> the loopback port the OpenChamber server uses
+#
+# Responsibilities:
+#   * Terminate the OpenHost-routed :8080 connection.
+#   * Serve a static 200 on /_healthz (declared health_check) the
+#     instant nginx is up, before OpenChamber finishes booting.
+#   * Turn any upstream 5xx / connection-refused during the (slow) cold
+#     start into a friendly 200 "starting" placeholder on "/", so the
+#     OpenHost readiness probe on "/" doesn't flag the app as failed.
+#   * Deny any request that does NOT carry the router-stamped
+#     X-OpenHost-Is-Owner: true header. OpenChamber's own UI auth is
+#     disabled here and the agent runs arbitrary shell commands, so the
+#     app is owner-only. The OpenHost router already blocks anonymous
+#     traffic (no public_paths); this is a second, in-container gate.
+#   * Proxy HTTP + WebSocket (/api/*/ws, terminal) + SSE (/api/event...)
+#     traffic to the OpenChamber server on 127.0.0.1:__UPSTREAM_PORT__.
+
+worker_processes 1;
+error_log /dev/stderr warn;
+pid /tmp/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    access_log /dev/stdout;
+
+    client_body_temp_path /tmp/nginx-client-body;
+    proxy_temp_path       /tmp/nginx-proxy;
+    fastcgi_temp_path     /tmp/nginx-fastcgi;
+    uwsgi_temp_path       /tmp/nginx-uwsgi;
+    scgi_temp_path        /tmp/nginx-scgi;
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    # Owner is the OpenHost zone owner (router-stamped, unspoofable: the
+    # router sets this header itself and strips any client-supplied copy).
+    map $http_x_openhost_is_owner $is_owner {
+        default 0;
+        "true"  1;
+    }
+
+    # Real external host, forwarded by the router; fall back to $host.
+    map $http_x_forwarded_host $forward_host {
+        default $http_x_forwarded_host;
+        ""      $host;
+    }
+
+    # Bodies can be large (file uploads, big diffs, pasted context).
+    client_max_body_size 512m;
+
+    upstream openchamber {
+        server 127.0.0.1:__UPSTREAM_PORT__;
+    }
+
+    server {
+        listen 8080;
+        server_name _;
+
+        # Router forwards Host: 127.0.0.1:8080; keep relative redirects
+        # path-only so the browser resolves them against the real domain.
+        absolute_redirect off;
+
+        # Long timeouts: agent runs, SSE streams and terminal sessions
+        # hold connections open for a long time.
+        proxy_read_timeout  86400s;
+        proxy_send_timeout  86400s;
+
+        # Health check: static 200 as soon as nginx is up. Placed BEFORE
+        # the owner gate so the readiness probe (no owner header)
+        # succeeds during cold start.
+        location = /_healthz {
+            add_header Content-Type text/plain;
+            return 200 "ok\n";
+        }
+
+        # Cold-start placeholder served if the upstream is not ready yet.
+        location @coldstart {
+            add_header Content-Type text/html;
+            return 200 "<!doctype html><meta charset=utf-8><title>OpenChamber starting</title><body style=\"font-family:system-ui;padding:2rem\"><h1>OpenChamber is starting...</h1><p>This can take a moment on a cold start. Refresh shortly.</p>";
+        }
+
+        # Owner gate + upstream proxy for everything else.
+        location / {
+            if ($is_owner = 0) {
+                return 403 "forbidden\n";
+            }
+            proxy_pass http://openchamber;
+            include /opt/openhost-openchamber/proxy_common.conf;
+
+            proxy_intercept_errors on;
+            error_page 502 503 504 = @coldstart;
+        }
+    }
+}
