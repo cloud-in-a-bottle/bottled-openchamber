@@ -54,22 +54,37 @@ strictly owner-only — there is deliberately no public mode.
 
 ## Credential handling
 
-The Anthropic API key is provisioned through the OpenHost **secrets
-service**, never baked into the image:
+Credentials are provisioned through the OpenHost **secrets service**,
+never baked into the image:
 
-1. The owner stores `ANTHROPIC_API_KEY` in the secrets app.
-2. This app declares it consumes that key (`[[services.v2.consumes]]`
-   with `grants = [{ key = "ANTHROPIC_API_KEY" }]`).
-3. At boot, `start.sh` fetches it via the router service proxy
+| Secret | Required | Purpose |
+|--------|----------|---------|
+| `ANTHROPIC_API_KEY` | yes | The model credential. Without it the UI loads but the agent cannot run. |
+| `GITHUB_TOKEN` | no | Authenticates `git` and `gh` for the agent — private repos, pushing branches, opening PRs. Without it git falls back to unauthenticated access to public repos. |
+
+1. The owner stores the keys in the secrets app.
+2. This app declares it consumes them (`[[services.v2.consumes]]` with
+   `grants = [{ key = "ANTHROPIC_API_KEY" }, { key = "GITHUB_TOKEN" }]`).
+3. At boot, `start.sh` fetches them in a single call via the router
+   service proxy
    (`POST $OPENHOST_ROUTER_URL/api/services/v2/call/secrets/get`) using
-   the app's `OPENHOST_APP_TOKEN`, and exports it into the process
-   environment. OpenChamber passes its whole environment to the managed
-   OpenCode child, which uses `ANTHROPIC_API_KEY` non-interactively.
+   the app's `OPENHOST_APP_TOKEN`, and exports each one it receives into
+   the process environment. OpenChamber passes its whole environment to
+   the managed OpenCode child, so every agent session and its shell
+   commands inherit them non-interactively.
 
-If the secrets fetch fails, the app falls back to an `ANTHROPIC_API_KEY`
-env var if present, and otherwise still starts so the owner can see the
-UI; the agent simply can't run until a key is configured (store it in
-the secrets app and reload this app).
+Each key is independently optional at boot. If the secrets fetch fails,
+or a key is absent from the response, the app falls back to a matching
+env var if one is set, and otherwise leaves the variable **unset** —
+deliberately not empty, since an empty `GITHUB_TOKEN` reads to `gh` as a
+broken credential rather than as absent. A missing key degrades one
+capability; it never blocks boot.
+
+> **Scope the GitHub token.** Every agent session inherits it, and agents
+> routinely read untrusted content (repositories, web pages, issue text).
+> A prompt injection would have that token in reach. Use a fine-grained
+> token limited to the repositories and permissions actually needed
+> rather than a broadly-scoped classic token.
 
 Note: if the owner edits providers in OpenChamber's Settings UI,
 OpenChamber/OpenCode may cache provider auth in OpenCode's `auth.json`
@@ -110,4 +125,6 @@ oh app deploy https://github.com/imbue-openhost/openhost-openchamber --name open
 
 Make sure `ANTHROPIC_API_KEY` is stored in the secrets app and that this
 app is granted the `{ key = "ANTHROPIC_API_KEY" }` permission at install
-time.
+time. Store `GITHUB_TOKEN` alongside it if the agent should be able to
+use `git` and `gh` authenticated; it is optional and can be added later
+(store the secret, then reload the app to pick it up).

@@ -26,15 +26,21 @@
 #   OPENCHAMBER_ALLOW_UNAUTHENTICATED_LAN escape hatch.
 #
 # Credential handling:
-#   The Anthropic API key is fetched at boot from the OpenHost secrets
-#   service via the router service proxy (using OPENHOST_APP_TOKEN) and
-#   exported as ANTHROPIC_API_KEY into the process environment. The
-#   OpenChamber server passes its full environment to the managed
-#   OpenCode child, so the agent picks it up non-interactively. We never
-#   write the key to a file under app_data ourselves. (OpenChamber /
-#   OpenCode may still cache provider auth in opencode's auth.json under
-#   app_data if the owner edits providers in the UI — that is the app's
-#   own behaviour and matches how OpenCode natively stores auth.)
+#   Secrets are fetched at boot from the OpenHost secrets service via the
+#   router service proxy (using OPENHOST_APP_TOKEN) and exported into the
+#   process environment. The OpenChamber server passes its full
+#   environment to the managed OpenCode child, so the agent picks them up
+#   non-interactively. We never write them to a file under app_data
+#   ourselves. (OpenChamber / OpenCode may still cache provider auth in
+#   opencode's auth.json under app_data if the owner edits providers in
+#   the UI — that is the app's own behaviour and matches how OpenCode
+#   natively stores auth.)
+#
+#   ANTHROPIC_API_KEY  required for the agent to run at all.
+#   GITHUB_TOKEN       optional; authenticates git and gh for the agent.
+#
+#   Both are fetched in one call and each is independently optional: a
+#   missing key degrades a capability but never blocks boot.
 
 set -euo pipefail
 
@@ -84,44 +90,70 @@ mkdir -p /tmp/nginx-client-body /tmp/nginx-proxy /tmp/nginx-fastcgi \
          /tmp/nginx-uwsgi /tmp/nginx-scgi
 
 # ---------------------------------------------------------------------------
-# Fetch the Anthropic API key from the OpenHost secrets service.
+# Fetch secrets from the OpenHost secrets service.
+#
+# All keys are requested in a single call. The response object is held in
+# a shell variable (never a file) and consumed by load_secret below.
 # ---------------------------------------------------------------------------
-fetch_secret() {
+SECRET_KEYS=(ANTHROPIC_API_KEY GITHUB_TOKEN)
+
+fetch_secrets() {
     local router="${OPENHOST_ROUTER_URL:-}"
     local apptok="${OPENHOST_APP_TOKEN:-}"
     if [ -z "$router" ] || [ -z "$apptok" ]; then
         echo "[start.sh] secrets: OPENHOST_ROUTER_URL / OPENHOST_APP_TOKEN unset; skipping fetch" >&2
         return 1
     fi
+    local body
+    body="$(printf '%s\n' "${SECRET_KEYS[@]}" | jq -R . | jq -s '{keys: .}')" || {
+        echo "[start.sh] secrets: could not build request body" >&2
+        return 1
+    }
     local resp
     resp="$(curl -fsS --max-time 15 \
         -H "Authorization: Bearer $apptok" \
         -H "Content-Type: application/json" \
         -X POST "$router/api/services/v2/call/secrets/get" \
-        -d '{"keys":["ANTHROPIC_API_KEY"]}' 2>/dev/null)" || {
+        -d "$body" 2>/dev/null)" || {
         echo "[start.sh] secrets: fetch call failed" >&2
         return 1
     }
-    local key
-    key="$(printf '%s' "$resp" | jq -r '.secrets.ANTHROPIC_API_KEY // empty' 2>/dev/null)" || key=""
-    if [ -n "$key" ]; then
-        printf '%s' "$key"
+    printf '%s' "$resp" | jq -c '.secrets // {}' 2>/dev/null || {
+        echo "[start.sh] secrets: malformed response" >&2
+        return 1
+    }
+}
+
+# Export one secret from the fetched payload, falling back to an
+# already-set environment variable. Returns non-zero when the value is
+# available from neither source, leaving the variable untouched so
+# consumers see it as genuinely unset rather than empty.
+load_secret() {
+    local var="$1" label="$2" value=""
+    if [ -n "${SECRETS_JSON:-}" ]; then
+        value="$(printf '%s' "$SECRETS_JSON" | jq -r --arg k "$var" '.[$k] // empty' 2>/dev/null)" || value=""
+    fi
+    if [ -n "$value" ]; then
+        export "$var=$value"
+        echo "[start.sh] $label loaded from secrets service"
         return 0
     fi
-    echo "[start.sh] secrets: ANTHROPIC_API_KEY not present in response" >&2
+    if [ -n "${!var:-}" ]; then
+        echo "[start.sh] $label taken from environment (not in secrets service)"
+        return 0
+    fi
     return 1
 }
 
-SECRET_KEY="$(fetch_secret || true)"
-if [ -n "${SECRET_KEY:-}" ]; then
-    export ANTHROPIC_API_KEY="$SECRET_KEY"
-    echo "[start.sh] Anthropic API key loaded from secrets service"
-elif [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-    echo "[start.sh] Anthropic API key taken from environment (secrets fetch unavailable)"
-else
+SECRETS_JSON="$(fetch_secrets || true)"
+
+load_secret ANTHROPIC_API_KEY "Anthropic API key" || \
     echo "[start.sh] WARNING: no Anthropic API key available; OpenChamber will start but the agent cannot run until a key is configured (store ANTHROPIC_API_KEY in the secrets app, then reload this app)"
-fi
-unset SECRET_KEY
+
+load_secret GITHUB_TOKEN "GitHub token" || \
+    echo "[start.sh] no GitHub token configured; git and gh will be unauthenticated (store GITHUB_TOKEN in the secrets app and reload this app to enable)"
+
+unset SECRETS_JSON
 
 # ---------------------------------------------------------------------------
 # Template nginx.conf with the upstream port.
@@ -151,6 +183,14 @@ NGINX_PID=$!
 # Launch the OpenChamber server as the openchamber user, loopback-bound,
 # in the foreground (default 'serve' daemonises; --foreground keeps it
 # inline so this supervisor can manage it).
+#
+# 'env' here overrides specific variables; it does NOT start from an
+# empty environment, so anything exported above (GITHUB_TOKEN, the
+# OPENHOST_* vars) is inherited by the server and in turn by the managed
+# OpenCode child and every agent shell it spawns. GITHUB_TOKEN is
+# deliberately NOT listed below: passing it explicitly would turn the
+# unconfigured case into an empty-string value, which gh treats as a
+# broken credential rather than as absent.
 # ---------------------------------------------------------------------------
 echo "[start.sh] Starting OpenChamber on 127.0.0.1:$UPSTREAM_PORT (no UI password; SSO-gated by OpenHost)"
 
