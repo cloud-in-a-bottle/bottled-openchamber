@@ -1,16 +1,16 @@
-# openhost-openchamber
+# bottled-openchamber
 
 [OpenChamber](https://openchamber.dev) — a web workspace for running,
 supervising, and reviewing AI coding work with the
 [OpenCode](https://opencode.ai) agent (session goals, multi-run, diff
 walkthroughs, GitHub workflows, a built-in terminal) — packaged as a
 self-hosted web app for
-[OpenHost](https://github.com/imbue-openhost/openhost).
+[Cloud in a Bottle](https://github.com/imbue-openhost/Cloud in a Bottle).
 
-The OpenHost zone owner opens `https://openchamber.<zone>/` and lands in
-the OpenChamber workspace with no login screen — OpenHost SSO carries
+The Cloud in a Bottle zone owner opens `https://openchamber.<zone>/` and lands in
+the OpenChamber workspace with no login screen — Cloud in a Bottle SSO carries
 them in. The bundled OpenCode agent talks to Anthropic Claude using an
-API key pulled from the OpenHost secrets service at boot.
+API key pulled from the Cloud in a Bottle secrets service at boot.
 
 ## Architecture
 
@@ -37,7 +37,7 @@ than double-prompt the owner, this package runs the server **bound to
 disabled and nothing outside the container can reach it directly. Two
 independent gates protect it instead:
 
-1. **The OpenHost router.** No `public_paths`, so it rejects every
+1. **The Cloud in a Bottle router.** No `public_paths`, so it rejects every
    anonymous request and only forwards the authenticated zone owner.
 2. **nginx, in-container.** Denies any request lacking the
    router-stamped `X-OpenHost-Is-Owner: true` header (set by the router
@@ -54,7 +54,7 @@ strictly owner-only — there is deliberately no public mode.
 
 ## Credential handling
 
-Credentials are provisioned through the OpenHost **secrets service**,
+Credentials are provisioned through the Cloud in a Bottle **secrets service**,
 never baked into the image:
 
 | Secret | Required | Purpose |
@@ -108,19 +108,19 @@ OpenCode derive from `os.homedir()` persists:
 
 Deliberately **not** configured — no `OPENCHAMBER_TUNNEL_*` env vars are
 set, so the server makes no outbound relay/tunnel connections. Remote
-access is provided entirely by OpenHost's own routing + SSO.
+access is provided entirely by Cloud in a Bottle's own routing + SSO.
 
 ## Cold start
 
 The bun server + managed OpenCode child take a little time to come up.
 nginx serves `/_healthz` (200) immediately and turns any upstream 5xx on
-`/` into a friendly "starting…" placeholder so the OpenHost readiness
+`/` into a friendly "starting…" placeholder so the Cloud in a Bottle readiness
 probe doesn't flag the app as failed during that window.
 
 ## Deploying
 
 ```
-oh app deploy https://github.com/imbue-openhost/openhost-openchamber --name openchamber --grant-permissions-v2 --wait
+oh app deploy https://github.com/imbue-openhost/bottled-openchamber --name openchamber --grant-permissions-v2 --wait
 ```
 
 Make sure `ANTHROPIC_API_KEY` is stored in the secrets app and that this
