@@ -1,7 +1,7 @@
 [app]
 name = "openchamber"
 version = "0.1.0"
-description = "OpenChamber — a web workspace for running, supervising, and reviewing AI coding work with the OpenCode agent (session goals, multi-run, diff walkthroughs, GitHub workflows, built-in terminal). Runs as a self-hosted web app on OpenHost: the zone owner is auto-authenticated via OpenHost SSO (no OpenChamber password prompt), and the Anthropic API key is pulled at boot from the OpenHost secrets service and handed to the bundled OpenCode CLI. Anonymous visitors cannot reach any route — the whole app is owner-only because every session can execute arbitrary shell commands in this container."
+description = "OpenChamber — a web workspace for running, supervising, and reviewing AI coding work with the OpenCode agent (session goals, multi-run, diff walkthroughs, GitHub workflows, built-in terminal). Runs as a self-hosted web app on Cloud in a Bottle: the zone owner is auto-authenticated via Cloud in a Bottle SSO (no OpenChamber password prompt), and the Anthropic API key is pulled at boot from the Cloud in a Bottle secrets service and handed to the bundled OpenCode CLI. Anonymous visitors cannot reach any route — the whole app is owner-only because every session can execute arbitrary shell commands in this container."
 authors = ["Andrew Laack <andrew@laack.co>"]
 
 [runtime.container]
