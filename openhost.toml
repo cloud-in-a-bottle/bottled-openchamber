@@ -26,9 +26,18 @@ health_check = "/_healthz"
 
 [resources]
 # Bun server + the managed OpenCode CLI child + whatever the agent
-# spawns (compilers, test runners, git). 2 GiB / 2 cores is a
-# comfortable baseline; bump for memory-heavy builds.
-memory_mb = 2048
+# spawns (compilers, test runners, git). 2 GiB was not enough: a handful
+# of concurrent agent processes (several `opencode run` children, or a
+# build/test suite alongside a session) hits the cgroup cap and the
+# kernel SIGKILLs them mid-run, which surfaces as an agent dying with no
+# output. 10 GiB leaves room for that fan-out.
+#
+# NOTE: this is deliberately above the RAM of a small host. The cgroup
+# cap is a ceiling, not a reservation, so it costs nothing when idle —
+# but on a host with less RAM than this it stops being the binding
+# constraint, and a genuine runaway is caught by the host OOM killer
+# instead of being contained to this app. Size the host accordingly.
+memory_mb = 10240
 cpu_cores = 2.0
 
 [data]
