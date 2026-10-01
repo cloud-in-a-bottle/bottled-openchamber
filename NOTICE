@@ -1,0 +1,12 @@
+Cloud in a Bottle packaging for OpenChamber
+
+The MIT license in LICENSE applies to the original Cloud in a Bottle
+packaging and integration code in this repository, including its original
+supervisor, proxy configuration, manifest, and documentation.
+
+Upstream software retains its own licenses and copyright notices:
+- OpenChamber: https://github.com/openchamber/openchamber
+- OpenCode: https://opencode.ai/
+
+The packaging grant does not relicense upstream applications, copied or
+adapted upstream material, dependencies, or software supplied by base images.
