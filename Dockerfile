@@ -26,15 +26,19 @@
 FROM oven/bun:1.3.14 AS builder
 WORKDIR /src
 
-# Pin to an OpenChamber release tag for reproducible builds.
-ARG OPENCHAMBER_REF=v1.18.2
+# Pin to the commit of an OpenChamber release tag, so a moved tag can't
+# change what we build. Bump the sha and the tag comment together.
+# v1.18.2
+ARG OPENCHAMBER_REF=da4a61ad836807660f0e4afb3dbfced353d3b837
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-RUN git clone --depth 1 --branch "${OPENCHAMBER_REF}" \
-        https://github.com/openchamber/openchamber.git . \
+RUN git init -q . \
+ && git remote add origin https://github.com/openchamber/openchamber.git \
+ && git fetch --depth 1 origin "${OPENCHAMBER_REF}" \
+ && git checkout -q FETCH_HEAD \
  && git rev-parse HEAD
 
 # Install workspace deps and build the web server + UI bundle.
@@ -83,8 +87,9 @@ RUN userdel bun 2>/dev/null || true \
  && chown -R openchamber:openchamber /home/openchamber
 
 # Install the OpenCode CLI globally (the agent OpenChamber drives),
-# matching upstream. Installed as the openchamber user into a user
-# npm prefix so no root-owned files end up on PATH.
+# matching upstream, pinned to an exact version. Installed as the
+# openchamber user into a user npm prefix so no root-owned files end up
+# on PATH.
 ENV NPM_CONFIG_PREFIX=/home/openchamber/.npm-global
 ENV PATH=/home/openchamber/.npm-global/bin:${PATH}
 USER openchamber
@@ -93,7 +98,7 @@ RUN npm config set prefix /home/openchamber/.npm-global \
              /home/openchamber/.local \
              /home/openchamber/.config \
              /home/openchamber/.ssh \
- && npm install -g opencode-ai \
+ && npm install -g opencode-ai@1.19.4 \
  && opencode --version
 USER root
 
