@@ -145,7 +145,7 @@ load_secret() {
     return 1
 }
 
-SECRETS_JSON=""
+SECRETS_JSON="$(fetch_secrets || true)"
 
 load_secret ANTHROPIC_API_KEY "Anthropic API key" || \
     echo "[start.sh] WARNING: no Anthropic API key available; OpenChamber will start but the agent cannot run until a key is configured (store ANTHROPIC_API_KEY in the secrets app, then reload this app)"
@@ -195,11 +195,11 @@ NGINX_PID=$!
 echo "[start.sh] Starting OpenChamber on 127.0.0.1:$UPSTREAM_PORT (no UI password; SSO-gated by OpenHost)"
 
 gosu "$APP_USER" env \
-    HOME="$BASE_HOME" \
+    HOME="$PERSIST_HOME" \
     PATH="$BASE_HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin" \
     NODE_ENV=production \
     OPENCHAMBER_HOST="127.0.0.1" \
-    OPENCHAMBER_DATA_DIR="$BASE_HOME/.config/openchamber" \
+    OPENCHAMBER_DATA_DIR="$OC_DATA_DIR" \
     OPENCODE_CONFIG_DIR="$PERSIST_HOME/.config/opencode" \
     ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
     bash -c "cd '$BASE_HOME' && exec bun packages/web/bin/cli.js serve --foreground --host 127.0.0.1 --port '$UPSTREAM_PORT'" \

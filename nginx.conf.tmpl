@@ -89,6 +89,9 @@ http {
 
         # Owner gate + upstream proxy for everything else.
         location / {
+            if ($is_owner = 0) {
+                return 403 "forbidden\n";
+            }
             proxy_pass http://openchamber;
             include /opt/openhost-openchamber/proxy_common.conf;
 
