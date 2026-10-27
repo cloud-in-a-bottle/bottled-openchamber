@@ -75,13 +75,19 @@ def test_settings_are_stored_under_app_data(stack: OpenhostStack) -> None:
     )
 
 
+def _connected_providers(providers: Any) -> list[str]:
+    """Provider ids OpenCode has credentials for. OpenCode 2 lists only those, as {"data": [{"id": ...}]}."""
+    if not isinstance(providers, dict):
+        return []
+    return [p.get("id") for p in providers.get("data", []) if isinstance(p, dict)]
+
+
 def test_anthropic_key_from_secrets_reaches_agent(stack: OpenhostStack) -> None:
     deadline = time.monotonic() + 180
     providers: Any = None
     while time.monotonic() < deadline:
         providers = _get_json_when_ready(stack, "/api/provider")
-        if "anthropic" in providers.get("connected", []):
+        if "anthropic" in _connected_providers(providers):
             return
         time.sleep(3)
-    connected = providers.get("connected") if isinstance(providers, dict) else providers
-    raise AssertionError(f"anthropic not connected in OpenCode (connected={connected}){_logs(stack)}")
+    raise AssertionError(f"anthropic not connected in OpenCode (providers={providers}){_logs(stack)}")
