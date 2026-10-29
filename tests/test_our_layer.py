@@ -4,6 +4,7 @@
 - In-container gate: nginx refuses any request without the router-stamped X-OpenHost-Is-Owner: true header.
 - Storage: HOME is moved under the app data dir, so OpenChamber/OpenCode state persists.
 - Secrets: ANTHROPIC_API_KEY is fetched from the secrets service at boot and reaches the OpenCode agent.
+- Private relay off: the relay is pinned to a dead loopback endpoint and turning it on is refused.
 """
 
 import json
@@ -73,6 +74,15 @@ def test_settings_are_stored_under_app_data(stack: OpenhostStack) -> None:
     assert json.loads(result.stdout).get("themeId") == theme, (
         f"setting not persisted to {settings_file}: {result.stdout[:500]}"
     )
+
+
+def test_private_relay_is_off(stack: OpenhostStack) -> None:
+    status = _get_json_when_ready(stack, "/api/openchamber/relay/status")
+    assert status.get("relayUrlLocked") is True and "openchamber.dev" not in str(status.get("relayUrl")), (
+        f"relay endpoint is not pinned away from the hosted relay: {status}"
+    )
+    enable = stack.owner_session.post(f"{stack.url}/api/openchamber/relay/enable", json={}, timeout=30)
+    assert enable.status_code == 403, f"turning on the relay was not refused: {enable.status_code}: {enable.text[:300]}"
 
 
 def _connected_providers(providers: Any) -> list[str]:

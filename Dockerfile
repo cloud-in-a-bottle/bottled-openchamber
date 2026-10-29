@@ -23,13 +23,13 @@
 # ---------------------------------------------------------------------------
 # Build stage — mirror upstream's bun build from a pinned tag.
 # ---------------------------------------------------------------------------
-FROM oven/bun:1.4.3 AS builder
+FROM oven/bun:1.4.4 AS builder
 WORKDIR /src
 
 # Pin to the commit of an OpenChamber release tag, so a moved tag can't
 # change what we build. Bump the sha and the tag comment together.
-# v2.5.0
-ARG OPENCHAMBER_REF=ad73d11a6e7cafa0880e238f92ba7cf5cf2cb1fd
+# v2.5.2
+ARG OPENCHAMBER_REF=c4919abc1e7a0a3beeaa126666487806bf79cfe0
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates \
@@ -51,7 +51,7 @@ RUN bun run build:web
 # ---------------------------------------------------------------------------
 # Runtime stage.
 # ---------------------------------------------------------------------------
-FROM oven/bun:1.4.3 AS runtime
+FROM oven/bun:1.4.4 AS runtime
 WORKDIR /home/openchamber
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -101,7 +101,7 @@ RUN npm config set prefix /home/openchamber/.npm-global \
              /home/openchamber/.local \
              /home/openchamber/.config \
              /home/openchamber/.ssh \
- && npm install -g @opencode/cli@2.0.32 \
+ && npm install -g @opencode/cli@2.1.4 \
  && opencode --version
 USER root
 
