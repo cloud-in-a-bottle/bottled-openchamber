@@ -23,13 +23,13 @@
 # ---------------------------------------------------------------------------
 # Build stage — mirror upstream's bun build from a pinned tag.
 # ---------------------------------------------------------------------------
-FROM oven/bun:1.3.14 AS builder
+FROM oven/bun:1.4.4 AS builder
 WORKDIR /src
 
 # Pin to the commit of an OpenChamber release tag, so a moved tag can't
 # change what we build. Bump the sha and the tag comment together.
-# v1.18.2
-ARG OPENCHAMBER_REF=da4a61ad836807660f0e4afb3dbfced353d3b837
+# v2.5.2
+ARG OPENCHAMBER_REF=c4919abc1e7a0a3beeaa126666487806bf79cfe0
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates \
@@ -43,12 +43,15 @@ RUN git init -q . \
 
 # Install workspace deps and build the web server + UI bundle.
 RUN bun install --frozen-lockfile --ignore-scripts
+# The server imports @openchamber/sdk at runtime and --ignore-scripts skips
+# the root postinstall that builds it, so build it explicitly (as upstream).
+RUN bun run --cwd packages/sdk build
 RUN bun run build:web
 
 # ---------------------------------------------------------------------------
 # Runtime stage.
 # ---------------------------------------------------------------------------
-FROM oven/bun:1.3.14 AS runtime
+FROM oven/bun:1.4.4 AS runtime
 WORKDIR /home/openchamber
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -61,7 +64,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #   jq, curl, ca-certs    — secrets fetch + JSON parsing + TLS roots
 #   git, openssh-client   — VCS operations the agent performs
 #   bash, less, python3   — shell + common agent tooling
-#   nodejs, npm           — required to `npm i -g opencode-ai`
+#   nodejs, npm           — required to `npm i -g @opencode/cli`
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         nginx \
@@ -98,7 +101,7 @@ RUN npm config set prefix /home/openchamber/.npm-global \
              /home/openchamber/.local \
              /home/openchamber/.config \
              /home/openchamber/.ssh \
- && npm install -g opencode-ai@1.19.4 \
+ && npm install -g @opencode/cli@2.1.4 \
  && opencode --version
 USER root
 
@@ -107,6 +110,8 @@ COPY --from=builder --chown=openchamber:openchamber /src/node_modules ./node_mod
 COPY --from=builder --chown=openchamber:openchamber /src/packages/web/node_modules ./packages/web/node_modules
 COPY --from=builder --chown=openchamber:openchamber /src/package.json ./package.json
 COPY --from=builder --chown=openchamber:openchamber /src/packages/web/package.json ./packages/web/package.json
+COPY --from=builder --chown=openchamber:openchamber /src/packages/sdk/package.json ./packages/sdk/package.json
+COPY --from=builder --chown=openchamber:openchamber /src/packages/sdk/dist ./packages/sdk/dist
 COPY --from=builder --chown=openchamber:openchamber /src/packages/web/bin ./packages/web/bin
 COPY --from=builder --chown=openchamber:openchamber /src/packages/web/server ./packages/web/server
 COPY --from=builder --chown=openchamber:openchamber /src/packages/web/dist ./packages/web/dist
