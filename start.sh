@@ -194,6 +194,19 @@ NGINX_PID=$!
 # ---------------------------------------------------------------------------
 echo "[start.sh] Starting OpenChamber on 127.0.0.1:$UPSTREAM_PORT (no UI password; SSO-gated by OpenHost)"
 
+# Private relay (phone pairing through wss://relay.openchamber.dev) is OFF:
+# the relay would be a second way into the server that bypasses the
+# OpenHost router. Upstream's only built-in switch for it is
+# OPENCHAMBER_ENTERPRISE_MODE=1, which also refuses connecting model
+# providers in the UI, keeps Settings env vars from OpenCode, limits
+# extensions and more, so instead we pin the relay endpoint
+# (OPENCHAMBER_RELAY_URL overrides the stored setting, the pairing offer
+# and the host connection) to a loopback port below 1024 that the
+# unprivileged app user can't listen on, so the host can't reach any
+# relay. nginx also refuses /api/openchamber/relay/enable. The push relay
+# (api.openchamber.dev, for the iOS app) is off too.
+RELAY_DISABLED_URL="ws://127.0.0.1:9/relay-disabled-by-openhost"
+
 gosu "$APP_USER" env \
     HOME="$PERSIST_HOME" \
     PATH="$BASE_HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin" \
@@ -201,6 +214,8 @@ gosu "$APP_USER" env \
     OPENCHAMBER_HOST="127.0.0.1" \
     OPENCHAMBER_DATA_DIR="$OC_DATA_DIR" \
     OPENCODE_CONFIG_DIR="$PERSIST_HOME/.config/opencode" \
+    OPENCHAMBER_RELAY_URL="$RELAY_DISABLED_URL" \
+    OPENCHAMBER_PUSH_RELAY_DISABLED=true \
     ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
     bash -c "cd '$BASE_HOME' && exec bun packages/web/bin/cli.js serve --foreground --host 127.0.0.1 --port '$UPSTREAM_PORT'" \
     &

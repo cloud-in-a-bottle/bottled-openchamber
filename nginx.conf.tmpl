@@ -15,6 +15,8 @@
 #     disabled here and the agent runs arbitrary shell commands, so the
 #     app is owner-only. The OpenHost router already blocks anonymous
 #     traffic (no public_paths); this is a second, in-container gate.
+#   * Refuse turning on OpenChamber's private relay (start.sh pins it
+#     to a dead endpoint), which would bypass the OpenHost router.
 #   * Proxy HTTP + WebSocket (/api/*/ws, terminal) + SSE (/api/event...)
 #     traffic to the OpenChamber server on 127.0.0.1:__UPSTREAM_PORT__.
 
@@ -85,6 +87,12 @@ http {
         location @coldstart {
             add_header Content-Type text/html;
             return 200 "<!doctype html><meta charset=utf-8><title>OpenChamber starting</title><body style=\"font-family:system-ui;padding:2rem\"><h1>OpenChamber is starting...</h1><p>This can take a moment on a cold start. Refresh shortly.</p>";
+        }
+
+        # The private relay is off (see start.sh): refuse turning it on.
+        location = /api/openchamber/relay/enable {
+            add_header Content-Type application/json always;
+            return 403 '{"error":"The private relay is disabled on OpenHost.","code":"relay_disabled"}';
         }
 
         # Owner gate + upstream proxy for everything else.

@@ -106,9 +106,9 @@ OpenCode derive from `os.homedir()` persists:
 
 ## Tunnels / Private Relay
 
-Deliberately **not** configured — no `OPENCHAMBER_TUNNEL_*` env vars are
-set, so the server makes no outbound relay/tunnel connections. Remote
-access is provided entirely by Cloud in a Bottle's own routing + SSO.
+No `OPENCHAMBER_TUNNEL_*` env vars are set, so the server opens no tunnels. Remote access is provided entirely by Cloud in a Bottle's own routing + SSO.
+
+The private relay (phone pairing through `wss://relay.openchamber.dev`) is turned off, because it would be a way into the server that bypasses the OpenHost router. Upstream's only built-in off switch, `OPENCHAMBER_ENTERPRISE_MODE=1`, also refuses connecting model providers from the UI, keeps env vars set in Settings away from OpenCode and restricts extensions, so we don't use it. Instead `start.sh` pins `OPENCHAMBER_RELAY_URL` (which overrides the stored relay setting, the pairing offer and the host connection) to `ws://127.0.0.1:9/...`, a privileged loopback port the app user can't listen on, and nginx refuses `POST /api/openchamber/relay/enable` with 403. `OPENCHAMBER_PUSH_RELAY_DISABLED=true` also turns off the push relay for the iOS app. Covered by `test_private_relay_is_off`.
 
 ## Cold start
 
