@@ -128,3 +128,5 @@ app is granted the `{ key = "ANTHROPIC_API_KEY" }` permission at install
 time. Store `GITHUB_TOKEN` alongside it if the agent should be able to
 use `git` and `gh` authenticated; it is optional and can be added later
 (store the secret, then reload the app to pick it up).
+
+`cloudinabottle.toml` sets `prebuilt_image`, so Cloud in a Bottle pulls our signed prebuilt image (built by CI from each release tag) instead of building the Dockerfile. To fork and modify this app, comment out `prebuilt_image` so your instance builds from source.

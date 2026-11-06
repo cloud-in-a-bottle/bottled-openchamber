@@ -1,11 +1,14 @@
 [app]
 name = "openchamber"
-version = "0.1.0"
+version = "1.0.0"
 description = "OpenChamber — a web workspace for running, supervising, and reviewing AI coding work with the OpenCode agent (session goals, multi-run, diff walkthroughs, GitHub workflows, built-in terminal). Runs as a self-hosted web app on Cloud in a Bottle: the zone owner is auto-authenticated via Cloud in a Bottle SSO (no OpenChamber password prompt), and the Anthropic API key is pulled at boot from the Cloud in a Bottle secrets service and handed to the bundled OpenCode CLI. Anonymous visitors cannot reach any route — the whole app is owner-only because every session can execute arbitrary shell commands in this container."
 authors = ["Andrew Laack <andrew@laack.co>"]
 
 [runtime.container]
 image = "Dockerfile"
+# Cloud in a Bottle pulls this signed prebuilt image (built from the release tag's commit by CI) instead of building
+# `image`. If you fork this app and change it, comment this line out so your instance builds `image` instead.
+prebuilt_image = "registry.cloudinabottle.org/bottled-openchamber"
 # nginx front proxy port. OpenChamber's server binds 127.0.0.1:3000
 # inside the container; nginx listens on 8080 and is what the OpenHost
 # router forwards to (HTTP + the WebSocket agent/terminal streams under
