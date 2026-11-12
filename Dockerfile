@@ -28,8 +28,8 @@ WORKDIR /src
 
 # Pin to the commit of an OpenChamber release tag, so a moved tag can't
 # change what we build. Bump the sha and the tag comment together.
-# v2.5.2
-ARG OPENCHAMBER_REF=c4919abc1e7a0a3beeaa126666487806bf79cfe0
+# v2.6.1
+ARG OPENCHAMBER_REF=ce853f415704d1bfe8d076a5cfb2caabac00fffd
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates \
@@ -101,7 +101,7 @@ RUN npm config set prefix /home/openchamber/.npm-global \
              /home/openchamber/.local \
              /home/openchamber/.config \
              /home/openchamber/.ssh \
- && npm install -g @opencode/cli@2.1.4 \
+ && npm install -g @opencode/cli@2.2.5 \
  && opencode --version
 USER root
 
