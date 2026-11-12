@@ -24,7 +24,7 @@ browser
 ```
 
 The image is built from OpenChamber's own source at a pinned release
-tag (`v2.5.0`) via its `bun run build:web`, then layered with nginx +
+tag (`v2.6.1`) via its `bun run build:web`, then layered with nginx +
 a supervisor. The OpenCode CLI is installed globally (`@opencode/cli`),
 exactly as upstream's Docker image does.
 
